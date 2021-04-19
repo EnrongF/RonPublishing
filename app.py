@@ -3,6 +3,7 @@ from flask import jsonify
 from flask import make_response
 import json
 import MySQLdb
+from time import strftime, gmtime
 
 app = Flask(__name__)
 
@@ -199,6 +200,93 @@ def list_user(user_id):
 @app.errorhandler(404)
 def resource_not_found(error):
     return make_response(jsonify({'error': 'Resource not found!'}), 404)
+
+
+@app.route('/api/v2/tweets', methods=['GET'])
+def get_tweets():
+    return list_tweets()
+
+
+def list_tweets():
+    conn = MySQLdb.connect(
+        host='localhost',
+        port=3306,
+        user='root',
+        passwd='Chenglong1121',
+        db='test'
+    )
+    print('open database successfully')
+    api_list = []
+    cur = conn.cursor()
+    cur.execute('select username, body, tweet_time, id from tweets')
+    data = cur.fetchall()
+    if len(data) != 0:
+        for row in data:
+            tweets = {'Tweet by': row[0], 'Body': row[1], 'Timestamp': row[2], 'id': row[3]}
+            api_list.append(tweets)
+    conn.close()
+    return jsonify({'tweet_list': api_list})
+
+
+@app.route('/api/v2/tweets', methods=['POST'])
+def add_tweets():
+    user_tweet = {}
+    if not request.json or not 'username' in request.json or not 'body' in request.json:
+        abort(400)
+    user_tweet = {'username': request.json['username'], 'body': request.json['body'],
+                  'created_at': strftime('%Y-%m-%d %H:%M:%S', gmtime())}
+    print(user_tweet)
+    return jsonify({'status': add_tweet(user_tweet)}), 200
+
+
+def add_tweet(new_tweets):
+    conn = MySQLdb.connect(
+        host='localhost',
+        port=3306,
+        user='root',
+        passwd='Chenglong1121',
+        db='test'
+    )
+    print('open database successfully')
+    cur = conn.cursor()
+    cur.execute('select * from users where username = %s', (new_tweets['username'],))
+    data = cur.fetchall()
+    if len(data) == 0:
+        abort(404)
+    else:
+        cur.execute('insert into tweets (username, body, tweet_time) values (%s, %s, %s)',
+                    (new_tweets['username'], new_tweets['body'], new_tweets['created_at']))
+        conn.commit()
+        return "Success"
+    conn.close()
+
+
+@app.route('/api/v2/tweets/<int:id>', methods=['GET'])
+def get_tweet(id):
+    return list_tweet(id)
+
+
+def list_tweet(tweet_id):
+    print(tweet_id)
+    conn = MySQLdb.connect(
+        host='localhost',
+        port=3306,
+        user='root',
+        passwd='Chenglong1121',
+        db='test'
+    )
+    print('open database successfully')
+    api_list = []
+    cur = conn.cursor()
+    cur.execute('select * from tweets where id = %s', (tweet_id,))
+    data = cur.fetchall()
+    print(data)
+    if len(data) == 0:
+        abort(404)
+    else:
+        tweet = {'id': data[0][0], 'username': data[0][1], 'body': data[0][2], 'tweet_time': data[0][3]}
+    conn.close()
+    return jsonify(tweet)
 
 
 if __name__ == '__main__':
